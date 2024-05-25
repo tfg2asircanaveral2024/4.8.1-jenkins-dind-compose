@@ -1,0 +1,30 @@
+services:
+  docker-dind:
+    image: tfg2asircanaveral2024/docker-dind:seguro
+    privileged: true
+    volumes:
+      - certs-cliente:/certs/cliente
+    networks:
+      - red-jenkins-dind
+
+  servidor-jenkins:
+    image: tfg2asircanaveral2024/4.8.1-jenkins-dind:latest
+    volumes:
+      - certs-cliente:/certs:ro
+    environment:
+      - DOCKER_HOST=tcp://docker-dind:2376
+      - DOCKER_CERT_PATH=/certs
+      - DOCKER_TLS_VERIFY=1
+    ports:
+      - 8080:8080
+    networks:
+      - red-jenkins-dind
+    depends_on:
+      - docker-dind
+
+volumes:
+  certs-cliente:
+
+networks:
+  red-jenkins-dind:
+    driver: bridge

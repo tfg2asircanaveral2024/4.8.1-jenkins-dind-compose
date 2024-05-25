@@ -1,0 +1,92 @@
+# Este fichero permite a los usuarios utilizar claves y certificados generados por ellos 
+# mismos, aumentando considerablemente la seguridad en la comunicación entre el Jenkins y el 
+# DinD.
+# Para usar este fichero, debes haber colocado tus claves y certificados sustituyendo los 
+# archivos que han sido añadidos en la ruta ./certs de este repositorio, manteniendo los 
+# nombres de los ficheros originales, y posteriormente introducir el siguiente comando:
+
+  #> docker compose -f docker-compose-cambio-pki.yml up -d
+
+# Recuerda que el certificado para el DinD debe ser de servidor, y el del Jenkins para cliente.
+
+# Si en tus certificados has utilizado un nombre para el DinD distinto de 'docker-dind', 
+# deberás definir una variable de entorno antes de levantar el entorno llamada 
+# NOMBRE_SERVIDOR, con el siguiente comando:
+
+  #> export NOMBRE_SERVIDOR=tu-nombre-de-servidor
+
+services:
+  docker-dind:
+    image: tfg2asircanaveral2024/docker-dind:seguro
+    privileged: true
+    networks:
+      red-jenkins-dind:
+        aliases:
+          - ${NOMBRE_SERVIDOR:-docker-dind}
+    configs:
+      - source: cert-ca
+        target: /certs/ca.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0444
+      - source: cert-dind
+        target: /certs/cert.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0444
+    secrets:
+      - source: clave-dind
+        target: /certs/key.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+    scale: 1
+
+  servidor-jenkins:
+    image: tfg2asircanaveral2024/4.8.1-jenkins-dind:latest
+    configs:
+      - source: cert-ca
+        target: /certs/ca.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0444
+      - source: cert-jenkins
+        target: /certs/cert.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0444
+    secrets:
+      - source: clave-jenkins
+        target: /certs/key.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+    environment:
+      - DOCKER_HOST=tcp://docker-dind:2376
+      - DOCKER_CERT_PATH=/certs
+      - DOCKER_TLS_VERIFY=1
+    ports:
+      - 8080:8080
+    networks:
+      - red-jenkins-dind
+    depends_on:
+      - docker-dind
+    scale: 1
+
+configs:
+  cert-ca:
+    file: ./certs/ca.pem
+  cert-dind:
+    file: ./certs/dind/cert.pem
+  cert-jenkins:
+    file: ./certs/jenkins/cert.pem
+
+secrets:
+  clave-dind:
+    file: ./certs/dind/key.pem
+  clave-jenkins:
+    file: ./certs/jenkins/key.pem
+
+networks:
+  red-jenkins-dind:
+    driver: bridge
